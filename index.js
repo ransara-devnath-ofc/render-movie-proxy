@@ -3,6 +3,9 @@ const axios = require('axios');
 const app = express();
 const PORT = process.env.PORT || 3000;
 const fuckingfast = require('./api/ffast.js');
+const config = {
+  API_KEY: "anjubot3"
+}
 
 app.get('/api/fuckingfast', async (req, res) => {
   const { url, apikey } = req.query;
