@@ -12,6 +12,6 @@
   },
   "dependencies": {
     "express": "^4.19.2",
-    "got-scraping": "^4.0.4"
+    "got-scraping": "^4.2.1"
   }
 }
