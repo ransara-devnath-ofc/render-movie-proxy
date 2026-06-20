@@ -1,5 +1,6 @@
-const express = require('express');
-const axios = require('axios');
+import express from 'express';
+import { gotScraping } from 'got-scraping';
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -11,36 +12,54 @@ app.get('/', (req, res) => {
 // The proxy streaming endpoint
 app.get('/proxy', async (req, res) => {
     const targetUrl = req.query.url;
-    
+
     if (!targetUrl) {
         return res.status(400).send('Error: Missing "url" parameter.');
     }
 
-    try {
-        console.log(`[Proxy] Routing stream request for: ${targetUrl}`);
+    console.log(`[Proxy] Routing stream request for: ${targetUrl}`);
 
-        const response = await axios({
-            method: 'GET',
-            url: targetUrl,
-            responseType: 'stream',
+    try {
+        const stream = gotScraping.stream(targetUrl, {
+            headerGeneratorOptions: {
+                browsers: [{ name: 'edge', minVersion: 149 }],
+                devices: ['desktop'],
+                operatingSystems: ['windows'],
+            },
             headers: {
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-                "Referer": "https://movie-box.co/",
-                "Origin": "https://movie-box.co"
+                'Referer': 'https://movie-box.co/',
+                'Origin': 'https://movie-box.co',
+            },
+            followRedirect: true,
+            throwHttpErrors: true,
+        });
+
+        // Forward useful response headers as soon as they arrive
+        stream.on('response', (response) => {
+            const forward = ['content-type', 'content-length', 'accept-ranges', 'content-range'];
+            for (const header of forward) {
+                if (response.headers[header]) {
+                    res.setHeader(header, response.headers[header]);
+                }
             }
         });
 
-        // Pass along the video content-type header so the bot receives it cleanly
-        if (response.headers['content-type']) {
-            res.setHeader('Content-Type', response.headers['content-type']);
-        }
+        stream.on('error', (err) => {
+            console.error(`[Proxy Error]: ${err.message}`);
+            if (!res.headersSent) {
+                res.status(500).send(`Proxy failed to fetch stream: ${err.message}`);
+            } else {
+                res.destroy();
+            }
+        });
 
-        // Pipe the incoming movie server stream directly back to the response
-        response.data.pipe(res);
+        stream.pipe(res);
 
     } catch (err) {
         console.error(`[Proxy Error]: ${err.message}`);
-        res.status(500).send(`Proxy failed to fetch video: ${err.message}`);
+        if (!res.headersSent) {
+            res.status(500).send(`Proxy failed to fetch stream: ${err.message}`);
+        }
     }
 });
 
